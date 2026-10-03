@@ -14,7 +14,7 @@ Design: see P1_ARCHITECTURE.md.
 7. Call parser: outer scanner + JSON end-offset scanner; `decode_calls`; I4, I5 + fuzz cases. ✅ (public dc-001..005 pass)
 8. `StreamDecoder` (bounded holdback); I6 property test (random splits). ✅ (public dc chunked pass)
 9. Eval example `compact_tools_eval.rs` (offline, deterministic, extended metrics); run twice + diff. ✅ (3/3 rt, 5/5 dc, 32.1% saved, runs identical)
-10. Live mode in eval; measure adherence on 2+ model families.
-11. (Bonus) Router wiring, flag off by default; I9 byte-identical test; non-streaming native retry (I10).
+10. Live mode in eval; measure adherence on 2+ model families. ✅ plumbing (mock-tested); real-model run needs user key
+11. (Bonus) Router wiring, flag off by default; I9 byte-identical test; non-streaming native retry (I10). ✅
 12. fmt + clippy, README (grammar + support matrix), PR `[compact-tools] …`.
 Later/not v1: BALANCED profile, type hoisting, per-tool fallback, min/max constraints.
