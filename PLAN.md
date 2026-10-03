@@ -192,3 +192,53 @@ Still **P1**. Core: ideas 1, 2, 5, 6, 8, 9 (all in-crate, deterministic). Differ
 4 (native fallback wiring) and 3 (type hoisting). Ask organizers how the body is serialized for
 token counting and whether descriptions must survive verbatim for the "schema kept" check — that
 decides whether `Pruned` can be the eval default.
+
+---
+
+## 7. Full-repo pass (all 1,761 tracked files) + "quick setup"
+
+**Quick setup.** There is no quicksetup file in the repo, the zip, the brief or ~/Downloads. The
+closest thing is README §"Quick Start: Docker only" (`cp .env.example .env` → set
+`SECRETS_ENCRYPTION_KEY`, `JWT_SECRET`, `AGENT_JWT_SECRET`, admin creds, `OPENAI_API_KEY` →
+`docker compose up -d` → http://localhost:8080). **We don't need it for either track:** the
+graders run `cargo run --release -p nasiko-llm-router --example …`, which needs no Postgres,
+Redis, Docker or UI. Only worth doing for a live demo of router wiring (bonus).
+
+**How the pass was done.** `scripts/build_repo_digest.py` extracts, for every tracked file, its
+size, module docs (`//!`), public items, headings, exports, or first lines; the digest
+(`notes/repo_digest.txt`, ~16k lines) was read end to end. Every file relevant to the tracks was
+then read in full: the whole `llm-router` request path, providers, config, brevity/compress/savings
+layers, routing (classifier, patterns, salience gate + model, boundary, cache, cells, registry),
+`nasiko-compress`, `nasiko-savings`, plus the migrations touching token savings.
+
+**Map of the repo (what each area is):**
+- `server/` control plane (Axum): auth, agents CRUD/upload/build worker, A2A dispatch, HITL, MCP
+  routes, observability/FinOps/savings APIs; mounts `llm-router` in-process.
+- `llm-router/` egress proxy (our scope): inbound parsers (OpenAI/Anthropic/Gemini/Responses) →
+  IR → resolver → 5-level routing → compress → brevity → providers (+fallback/param-fix retry).
+- `orchestrator/`, `react-agent/` agent selection, MAF workflows, PACMS context selection.
+- `mcp-gateway/` tool catalog aggregation, permissions, BM25/semantic tool search.
+- `compress/`, `savings/`, `pricing/` token-optimization and cost engines.
+- `agents/` ~30 example agents (Rust/Go/Python) with **real OpenAI tool definitions**
+  (`agents/*/src/tools.rs`, `tools.go`) → ready-made realistic corpus for P1 extra eval cases.
+- `ui/` React dashboard (TokenOps, router, chat, MCP pages); `migrations/` 53 SQL files.
+
+**New facts that change the plan:**
+1. `providers/fallback.rs` already does patch-and-retry on provider rejection (`try_fix_param`)
+   → P1's native-fallback-on-decode-failure has a direct in-house precedent.
+2. Every token layer follows one pattern: per-agent switch (`compress_enabled`) + fleet kill
+   switch + `Skipped` reasons → `to_metadata()` in `token_usage.metadata`. P1 wiring should copy it.
+3. The salience model is the ML template for P2: LLM-labelled data (provenance carries a
+   `gate_prompt_sha256`), Python-trained hashed n-gram LR with **Platt calibration**, weights
+   embedded as JSON, feature-engine parity checked. Training scripts aren't in the public repo.
+4. **Regex baseline on the P2 public set: 3/10** (`scripts/p2_regex_baseline.py`). Failures are
+   exactly the brief's near-misses: "Explain what … API returns" → code_understanding (gold:
+   technical_design); "Fix typo…", "Implement a parser…", "Summarize…" → general.
+5. `classifier_eval.rs` is still absent upstream (P2 would create it from scratch).
+6. Committed `Cargo.lock` is stale; any build rewrites it — keep unrelated churn out of the PR.
+
+**Track call, revisited.** P1 stays the lower-risk pick (deterministic scoring, isolated crate).
+P2 is now a credible alternative: a 30% baseline is easy to beat visibly, and the repo already
+has the exact pattern (embedded calibrated LR) to copy, but it needs an LLM API key for labelling
+and more surface area (trait, config, timeout fallback, sticky tests, ECE). Decide by: do we have
+an API key now (P2 needs one more than P1) and does the team prefer ML or systems work?
