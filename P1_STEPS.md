@@ -11,7 +11,7 @@ Design: see P1_ARCHITECTURE.md.
 4. Crate skeleton `tool-compact/` + Schema AST + Normalizer + capability check (+ tests). ✅
 5. Compiler/renderer + `decode_tools` parser + self-check; I1, I2, I3, I7 tests. ✅ (closed object = `{}!`, top-level `NAME!`, no params `NAME()`)
 6. Validator (contract rules) + tests. ✅
-7. Call parser: outer scanner + JSON end-offset scanner; `decode_calls`; I4, I5 + fuzz cases.
+7. Call parser: outer scanner + JSON end-offset scanner; `decode_calls`; I4, I5 + fuzz cases. ✅ (public dc-001..005 pass)
 8. `StreamDecoder` (bounded holdback); I6 property test (random splits).
 9. Eval example `compact_tools_eval.rs` (offline, deterministic, extended metrics); run twice + diff.
 10. Live mode in eval; measure adherence on 2+ model families.
