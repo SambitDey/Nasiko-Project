@@ -114,3 +114,81 @@ prior tool calls we can't re-render; byte-identical-when-off test.
    with template sections; demo script.
 
 Commit/push cadence: notes & eval outputs to this repo; code to the fork branch.
+
+---
+
+## 6. Second pass (2026-10-03, from the full zip) — innovative directions
+
+The zip (`Nasiko-Labs-nasiko-v1.0.0-1815-g70b4e74.zip`) is byte-identical to the GitHub clone at
+`70b4e74` (only diff: `Cargo.lock`, which upstream has let go stale — `cargo build` rewrites it; keep
+unrelated lockfile churn out of the PR). No hidden code; the new ideas come from reading the
+token-optimisation stack end-to-end (`savings.rs`, `nasiko-savings`, `compress/`, `brevity.rs`,
+`inbound/responses.rs`, `mcp-gateway`).
+
+### Measured format variants (o200k, public set; scorer's JSON style unknown → both shown)
+
+| format | compact-JSON body | pretty body |
+|---|---|---|
+| brief's arrow style, all descriptions | −36.6% | −48.1% |
+| TypeScript-style signature, all descriptions | −35.3% | −47.1% |
+| lean (redundant descriptions pruned) | −56.6% | −63.6% |
+
+→ TS-style costs ~the same tokens as the brief's style but is the shape models have seen most
+(adherence upside for free). Description pruning is where the next 20 points are.
+
+### P1 ideas, ranked by (score impact × uniqueness) / effort
+
+1. **Lossless-by-construction encoder with a self-checking bypass.** `encode_tools` immediately runs
+   `decode_tools` on its own output and bypasses compaction (`compacted:false`) for any tool whose
+   schema doesn't round-trip exactly. "Schema kept" becomes a runtime invariant, not a hope —
+   unsupported features are detected by construction rather than by an allow-list that can drift.
+2. **Information-preserving description pruning (deterministic).** Drop a description only when it adds
+   nothing: every content word already appears in the tool/param name or is implied by the type
+   (`"Start time, ISO 8601"` on a `datetime` → dropped; `"Duration in minutes"` → keeps `minutes`
+   because the unit disambiguates). Two levels: `Lossless` (default) and `Pruned`; report both.
+3. **Shared type hoisting for real catalogs.** MCP/Composio tool sets repeat sub-schemas (address,
+   pagination, attendee lists). Hoist identical nested objects into named types once
+   (`type Attendee = {...}`) and reference them. Little effect on the 2-tool public set, large on
+   real 20–50-tool catalogs and likely on the private set; a genuinely different idea.
+4. **Fall back to native on decode failure, invisible to the client** (router wiring). If the compact
+   reply fails validation, re-issue the same request with native tools once. Fail-closed for
+   correctness *and* client never sees a compaction-induced error; costs tokens only on failure.
+   Recorded as `compact_tools.fallback` in `token_usage.metadata`. Most "production-minded" story.
+5. **Cache-prefix stability.** Following `compress.rs`'s own reasoning: the compact block is a pure
+   function of the tool list, placed as the first system message, byte-identical every turn, so it
+   keeps provider prompt caching working. Test: same tools → identical bytes across turns.
+6. **Never-grows + idempotent invariants**, mirroring `nasiko-compress`: if compact form isn't
+   smaller for a request (tiny tool, huge instruction) → bypass. Property-tested.
+7. **Telemetry in the house style.** `to_metadata()` block like `brevity.rs` (`applied`, `skipped`
+   reason, bytes before/after, decode outcome) so the existing dashboard pipeline can pick it up.
+   Stay inside `llm-router/` — the `savings` crate's `Layer` enum is CHECK-constrained by a
+   migration and outside the allowed scope; propose it as a follow-up in the PR.
+8. **Zero-latency streaming.** `StreamDecoder` holds back only the longest suffix that could begin
+   `<<call` (≤6 bytes), so plain answers stream with no added latency; calls are emitted as standard
+   `ToolCallDelta`s the moment `>>` closes.
+9. **Differential property tests.** Random schemas + random valid args: encode→decode_tools ≡
+   original; render→random chunk split→StreamDecoder ≡ whole-string decode; random mutations
+   (drop required key, wrong enum, wrong type) → always an error, never a call.
+10. **Adherence tuning loop in live mode.** Small matrix (format × instruction wording × 2 providers),
+    pick the variant with best decode-success at acceptable token cost; report the matrix honestly
+    in the PR (judges reward negative results too).
+
+### P2 ideas (if switching tracks)
+
+1. **Confidence cascade:** regex (µs) → embedded hashed-n-gram multinomial LR reusing the salience
+   feature engine (µs, no network) → optional hosted LLM only when confidence < τ. Below a floor →
+   safe default (`General` + current tier), counted as fallback, not error.
+2. **Temperature-scaled calibration** fitted on our validation split → low ECE, which the scorer penalises.
+3. **Instruction-focus features** for the near-miss cases (pub-08 "do not redesign… just change TODO"):
+   weight the clause after `just/only/simply` and down-weight negated spans.
+4. **Structural complexity estimator:** count constraints (`do not`, enumerations, "and"-joined
+   deliverables), context length, code presence, entities → ordinal 1–5; feed complexity into the
+   tier prior without changing the bandit key (keeps learned cells valid).
+5. **Data pipeline:** LLM-generated paraphrases + adversarial near-misses per label, MinHash dedup
+   across splits, documented rubric.
+
+### Updated recommendation
+Still **P1**. Core: ideas 1, 2, 5, 6, 8, 9 (all in-crate, deterministic). Differentiators if time:
+4 (native fallback wiring) and 3 (type hoisting). Ask organizers how the body is serialized for
+token counting and whether descriptions must survive verbatim for the "schema kept" check — that
+decides whether `Pruned` can be the eval default.
