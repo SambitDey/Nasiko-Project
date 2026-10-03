@@ -3,6 +3,8 @@
 Design: see P1_ARCHITECTURE.md.
 
 0. Contract frozen (P1_ARCHITECTURE.md). ✅ (this commit)
+   Step 1 ✅ A2 chosen. Step 2 ✅ (live test run by user; grammar A2 frozen).
+   Step 3 ✅ fork SambitDey/nasiko, branch compact-tools @ upstream 796211c2; llm-router+compress tests green (473 passed).
 1. Grammar candidates A/B/C: Python prototype renders public set + repo agent tools; o200k token table.
 2. Tiny live adherence test of A/B/C (needs API key; else choose on tokens + priors). Freeze grammar.
 3. Fork SambitDey/nasiko, branch `compact-tools`; build + tests green.
