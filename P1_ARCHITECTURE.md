@@ -60,3 +60,15 @@ native semantics · I9 router flag off → byte-identical · I10 no fallback aft
 - **C (TypeScript-ish):** `name(a:{title:string; dur?:integer /*minutes*/; vis?:'public'|'private'}) // desc`
 Description escaping defined per candidate (e.g. `\"`/`\\` inside `@"..."`; `#`/`*/` forbidden
 → fallback if a description contains the delimiter). Call syntax fixed: `<<call NAME {json}>>`.
+
+## Step 1 result: token benchmark (o200k, compact-JSON body)
+| cand | public full | public schema | extra full | extra schema |
+|---|---|---|---|---|
+| A inline `#` | 31.3% | 39.3% | 46.7% | 49.9% |
+| B `!`/`@"…"` | 25.4% | 31.6% | 42.1% | 44.9% |
+| C TS-ish | 27.7% | 34.6% | 40.2% | 42.9% |
+| **A2 line-per-param** | **32.2%** | **40.3%** | **46.1%** | **49.2%** |
+A is ambiguous (descriptions contain commas). **Provisional pick: A2** (cheapest + unambiguous):
+`name # desc` / ` param[?]:type # desc` (1 space indent per nesting level, `{}` = object whose
+fields follow indented, `[T]` arrays, `a|b` enums). Descriptions with newlines or enum literals
+with `|`, `#`, whitespace → fallback. Final freeze after step-2 live check.
