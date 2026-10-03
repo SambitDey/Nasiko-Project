@@ -12,3 +12,12 @@
 10. Live mode (PROVIDER_BASE_URL + MODEL): needs API key; test 2 models, tune instructions.
 11. (Bonus) Router wiring behind `TOOL_COMPACT_ENABLED` (off by default), byte-identical test, native fallback on decode failure.
 12. fmt + clippy zero warnings, README/grammar doc, PR `[compact-tools] …` with template.
+
+## Adopted from P1_SOTA_Compact_Tool_Schemas.md
+- Step 3 split: Normalizer → Capability analyzer (explicit support matrix in README; unsupported → JSON fallback) → Compiler.
+- Profiles: SAFE (lossless, default) / BALANCED (redundant descriptions pruned). Aggressive = out of scope.
+- Decoder = hand-written state machine (no regex/split); JSON args kept as-is.
+- Deterministic, cache-stable output (test: same input → same bytes).
+- Benchmark reports compression + adherence + decoder robustness, compact vs native.
+- Not doing: tool search, retrieval, code mode, fuzzy repair, custom arg format.
+- Note: `str!` vs `title?` style decided by token measurement in step 9.
