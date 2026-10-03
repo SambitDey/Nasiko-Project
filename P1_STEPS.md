@@ -9,7 +9,7 @@ Design: see P1_ARCHITECTURE.md.
 2. Tiny live adherence test of A/B/C (needs API key; else choose on tokens + priors). Freeze grammar.
 3. Fork SambitDey/nasiko, branch `compact-tools`; build + tests green.
 4. Crate skeleton `tool-compact/` + Schema AST + Normalizer + capability check (+ tests). ✅
-5. Compiler/renderer + `decode_tools` parser + self-check; I1, I2, I3, I7 tests.
+5. Compiler/renderer + `decode_tools` parser + self-check; I1, I2, I3, I7 tests. ✅ (closed object = `{}!`, top-level `NAME!`, no params `NAME()`)
 6. Validator (contract rules) + tests.
 7. Call parser: outer scanner + JSON end-offset scanner; `decode_calls`; I4, I5 + fuzz cases.
 8. `StreamDecoder` (bounded holdback); I6 property test (random splits).
