@@ -1,0 +1,52 @@
+I can't create the file from here, because this side channel has no file access. Ask in the main conversation and the file (e.g. `~/work-2026-10-03/REPO_OVERVIEW.md`) will be written and pushed. Here is the content it would have, based on what has been read so far. The repo pass is still running, so the parts on `ui/` and the end of `server/` are thinner.
+
+---
+
+# Nasiko repo overview (commit `70b4e74`)
+
+**What it is:** a self-hosted platform for deploying and running AI agents. Users upload agents written in any framework or language that speak the A2A v1.0 protocol. Nasiko builds them, runs them, sends their LLM calls through its own router, reports cost and tokens, and gives them tools through an MCP gateway. It's a Rust workspace (edition 2024) with a React/Vite UI built into the server binary, licensed Apache-2.0.
+
+**How to run it:** the README's "Quick Start: Docker only" (`cp .env.example .env`, set the secrets, `docker compose up -d`, then open `localhost:8080`). Contributors can instead run `just infra` and `just run`. **Neither is needed for the buildathon**; you only need Rust and `cargo run --example …`.
+
+## Workspace crates (members of the root `Cargo.toml`)
+
+| Crate | Role |
+|---|---|
+| `server` | Axum control plane and the single entry point: auth, agent upload/build/deploy, chat, the A2A proxy, MAF workflows, HITL, the MCP HTTP routes, observability/FinOps APIs, and serving the built-in UI |
+| `llm-router` | **Hackathon focus.** OpenAI-compatible proxy for agents' LLM calls: verifies JWTs, works out provider/model/key, routes models at 5 levels, compresses payloads, adds the brevity directive, translates between providers, falls back on failure, logs usage and savings |
+| `compress` | Pure, deterministic compression of tool results (JSON, logs, diffs, search output); never makes output bigger, never reads env vars. The model for a new `tool-compact` crate |
+| `savings` | Ledger of token savings per optimisation layer (`Layer` names are CHECK-constrained by migration 0052) |
+| `pricing` | The single cost engine: model name normalisation, price book, inferred cache prices, cost calculation |
+| `orchestrator` | Semantic agent routing (vector shortlist → rerank → LLM pick), MAF planner/executor, PACMS context selection |
+| `react-agent` | ReAct orchestrator built on rig, calling agents over A2A as tools |
+| `mcp-gateway` | Aggregates MCP tools across connectors, permissions, Composio, OAuth, tool search, filling in missing descriptions |
+| `auth`, `secrets`, `config` | JWT and passwords; AES-GCM with per-scope HKDF keys; platform env config |
+| `runtime`, `oci`, `agent-proxy` | Docker/simulated container runtime and stats; built-in OCI registry; agent endpoint lookup |
+| `flow`, `hitl` | Flow guard (traceparent, cascade limits); human-in-the-loop requests, resume dispatcher |
+| `observability` | OTel, Tempo/Loki clients, trace usage extraction |
+| `types`, `utils`, `github`, `coding-policy` | A2A types; shared helpers; GitHub OAuth and repo cloning; minimal-code policy |
+| `cli` | `nasiko` CLI: deploy, chat TUI, MCP, llm-config, connecting Claude Code/Codex/OpenCode/Cursor |
+| `bench`, `bench-support` | Goose load tests; mock LLM and simulated agent |
+
+**Not workspace crates:** `agents/` holds about 25 example agents (Rust/Go/Python). Their `tools.rs`/`tools.go` files contain real OpenAI tool schemas, which would make a good extra test set for P1. Also `ui/` (871 files, React), `migrations/` (53 SQL files), and `docs/` (16 design docs).
+
+## llm-router request path (`handlers/chat.rs::chat_core`)
+
+1. Read the request into the standard internal request shape (`ir/chat.rs`, OpenAI format; unknown fields are kept and passed through).
+2. `resolve_routed_request` → `routing::route_model`, which tries in order: Pinned → CacheHit → SalienceGate (a small built-in text model that screens out small talk) → **Classify** (keyword/regex request type + Thompson-sampled tier; only at `cold_start`/`switch`, sticky on `continue`) → Config → Default.
+3. Compression step (`compress.rs`, tool results only, keeps the prompt prefix stable for provider caching).
+4. Brevity step (`brevity.rs`, a trailing system message, with a deliberately untouched comparison group).
+5. `providers/fallback.rs` calls OpenAI, Anthropic, Gemini, Bedrock, OpenRouter, Azure or a custom provider.
+6. Convert the response back to the caller's format, then log usage and savings without waiting for the result.
+
+Settings live in `llm-router/src/config.rs` (`GatewayConfig::from_env`), the binary is `src/bin/llm-router.rs`, and the only example today is `examples/mint_token.rs`. **`classifier_eval.rs` is missing**, even though the brief says it ships.
+
+## Repo conventions
+
+- Zero warnings under `cargo check` and `cargo clippy`; run `cargo fmt`.
+- Dependencies are declared once in the root `Cargo.toml` (`dep.workspace = true`).
+- Extension points are traits passed around as `Arc<dyn Trait>`.
+- Fail closed, stay deterministic, and keep libraries free of env reads and I/O.
+- Unit tests must not touch the network, a database or Docker.
+- Standards docs: `docs/CLEAN_CODE_GUIDE.md`, `ORGANIZATION.md`, `API_CONVENTIONS.md`.
+- The committed `Cargo.lock` is stale, so a build rewrites it; keep that churn out of the PR.
